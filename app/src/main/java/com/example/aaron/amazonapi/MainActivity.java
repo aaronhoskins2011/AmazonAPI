@@ -1,7 +1,6 @@
 package com.example.aaron.amazonapi;
 
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.DefaultItemAnimator;
@@ -16,130 +15,91 @@ import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 
-public class MainActivity extends AppCompatActivity  {
-
+public class MainActivity extends AppCompatActivity {
+    public static final String TAG = "_MAIN_ACTIVITY";
+    public static final String KEY = "JSON";
+    public static final String EMPTY_STRING = "";
+    public static final String NOT_RECIEVED = " NOT RECIEVED ";
+    String json = EMPTY_STRING;
+    List<AmazonProfile>  amazonList;
     RecyclerView rvAmazonList;
     RecyclerView.LayoutManager layoutManager;
     RecyclerView.ItemAnimator itemAnimator;
     AmazonRVAdaptor amazonRVAdaptor;
-    List<AmazonProfile> amazonList;
-    public static final String AMAZON_URL = "http://de-coding-test.s3.amazonaws.com/books.json";
-    static String responseString = "";
-
-    AmazonDynamicBroadcastReciever amazonDynamicBroadcastReciever;
+    /*************************
+     *   onCreate()          *
+     ************************/
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
-
-
-
-
-
-
-
-
-
-
-        /*************************************
-         **   Client/Request initialization **
-         * *********************************/
-        final OkHttpClient client = new OkHttpClient();
-        final Request request = new Request.Builder().url(AMAZON_URL).build();
-        IntentFilter intentFilter = new IntentFilter("amazonListInfo");
-        registerReceiver(amazonDynamicBroadcastReciever, intentFilter);
-        startAmazonIntentService();
-        Intent responceIntent = getIntent();
-        responceIntent.setAction("amazonListInfo");
-        Bundle b = responceIntent.getBundleExtra("info");
-       // String recieved = b.getString("info");
-        //Log.d("TAG", "onCreate: " + recieved);
-
-
-        registerReceiver(amazonDynamicBroadcastReciever , intentFilter);
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    //Type list = new TypeToken<List<AmazonProfile>>(){}.getType();
-                    //Gson gson = new Gson();
-                    //responseString = response.body().string();
-                    //amazonList = gson.fromJson(responseString, list);
-                   // startAmazonIntentService();
-                    //amazonDynamicBroadcastReciever= new AmazonDynamicBroadcastReciever();
-                    //intentFilter = new IntentFilter();
-                    //intentFilter.addAction("amazonListInfo");
-
-                    //responceIntent.setAction("amazonListInfo");
-                    //tring brcstRecv = responceIntent.getStringExtra("info");
-
-                    //gson = new Gson();
-                    //Log.d("MAIN_ACTIVITY", "onResponse: " + brcstRecv);
-                    //responseString = response.body().string();
-                    //amazonList = gson.fromJson(responseString, list);
-                    //initRV();
-
-
-
-                }
-            });
-
-
+        startJsonCache();
+        amazonList =  getAmazonArrayList();
+        initRV();
     }
 
-    @Override
-    protected void onStop() {
-        super.onStop();
-        unregisterReceiver(amazonDynamicBroadcastReciever);
+    public void startAmazonIntentService(){
+        Intent amazonIntent = new Intent(this,AmzIntentService.class);
+        amazonIntent.setAction("rest_amazon_service");
+        startService(amazonIntent);
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        //amazonDynamicBroadcastReciever= new AmazonDynamicBroadcastReciever(null);
-        //intentFilter = new IntentFilter();
-        //intentFilter.addAction("amazonListInfo");
-        //registerReceiver(amazonDynamicBroadcastReciever, intentFilter);
+    public void handleJsonCache(){
+        try {
+            if(InternalStorage.fileExistance(json, this) && !(getIntent().getFlags() == FLAG_ACTIVITY_NEW_TASK)){
+                deleteFile("JSONBRD");
+                Log.d(TAG, "onCreate: >>>>>     Starting Amazon Intent Service     ");
+                startAmazonIntentService();
+            }
+            if(!InternalStorage.fileExistance(json, this)){
+                Log.d(TAG, "onCreate: >>>>>     Starting Amazon Intent Service     ");
+                startAmazonIntentService();
+            }
+            if(getIntent().getFlags() == FLAG_ACTIVITY_NEW_TASK) {
+                json = InternalStorage.readString(this, "JSONBRD");
+            }
+            if (json.equals(EMPTY_STRING)) {
+                startAmazonIntentService();
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        Log.d(TAG, "onCreate: <<<<<     JSON Received on MAIN ACTIVITY == " + json);
     }
 
-    /**********************************
-     *  Intent Service Method         *
-     *********************************/
-    public  void startAmazonIntentService(){
-        Intent amazonIntentService = new Intent(this,AmazonIntentService.class);
-        amazonIntentService.setAction("recieve_Info");
-        startService(amazonIntentService);
+    public void startJsonCache(){
+        Timer timer = new Timer();
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run () {
+                handleJsonCache();
+            }
+        };
+        timer.schedule (task, 0l, 1000*30*60);   // 1000*10*60 every 10 minut
     }
-
-
+    public List<AmazonProfile> getAmazonArrayList(){
+        Type list = new TypeToken<List<AmazonProfile>>(){}.getType();
+        Gson gson = new Gson();
+        return gson.fromJson(json, list);
+    }
     private void initRV(){
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Intent responceIntent = getIntent();
-                responceIntent.setAction("amazonListInfo");
-                String brcstRecv = responceIntent.getStringExtra("info");
-                Gson gson = new Gson();
-                gson = new Gson();
-                Log.d("MAIN_ACTIVITY", "onResponse: " + brcstRecv);
+
                 /*****************************************
                  *     Recycle View initialization       *
                  * **************************************/
-               /* rvAmazonList = (RecyclerView)findViewById(R.id.rvAmazonLIst);
+                rvAmazonList = (RecyclerView)findViewById(R.id.rvAmazonLIst);
                 layoutManager = new LinearLayoutManager(getApplicationContext());
                 itemAnimator = new DefaultItemAnimator();
                 rvAmazonList.setLayoutManager(layoutManager);
@@ -147,9 +107,7 @@ public class MainActivity extends AppCompatActivity  {
                 //Adaptor instantiated
                 amazonRVAdaptor = new AmazonRVAdaptor(amazonList,getApplicationContext());
                 rvAmazonList.setAdapter(amazonRVAdaptor);
-                amazonRVAdaptor.notifyDataSetChanged();*/
-
-
+                amazonRVAdaptor.notifyDataSetChanged();
             }
         });
     }
